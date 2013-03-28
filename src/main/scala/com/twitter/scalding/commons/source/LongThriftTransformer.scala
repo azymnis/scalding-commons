@@ -17,6 +17,7 @@ limitations under the License.
 package com.twitter.scalding.commons.source
 
 import cascading.pipe.Pipe
+import cascading.scheme.local.{ TextDelimited => CLTextDelimited }
 import cascading.tuple.Fields
 import com.twitter.elephantbird.mapreduce.io.ThriftWritable
 import com.twitter.elephantbird.util.{ ThriftUtils, TypeRef }
@@ -30,20 +31,29 @@ trait LongThriftTransformer[V <: TBase[_, _]] extends Source {
   def mt: Manifest[V]
   def fields: Fields
 
+  // This jank is needed for making these work with JobTest
+  override def localScheme = { println("This does not work yet"); new CLTextDelimited(fields) }
+
   // meant to override fields within WritableSequenceFileScheme.
   val keyType = classOf[LongWritable]
   val valueType = classOf[ThriftWritable[V]].asInstanceOf[Class[Writable]]
   override protected def transformForRead(pipe: Pipe): Pipe = {
-    new RichPipe(pipe).mapTo(fields -> fields) { v: (LongWritable, ThriftWritable[V]) =>
-      v._2.setConverter(mt.erasure.asInstanceOf[Class[V]])
-      (v._1.get, v._2.get)
+    Mode.mode match {
+      case _: TestMode => pipe
+      case _ => new RichPipe(pipe).mapTo(fields -> fields) { v: (LongWritable, ThriftWritable[V]) =>
+        v._2.setConverter(mt.erasure.asInstanceOf[Class[V]])
+        (v._1.get, v._2.get)
+      }
     }
   }
   override protected def transformForWrite(pipe: Pipe) = {
-    new RichPipe(pipe).mapTo(fields -> fields) { v: (Long, V) =>
-      val key = new LongWritable(v._1)
-      val value = new ThriftWritable(v._2, typeRef)
-      (key, value)
+    Mode.mode match {
+      case _: TestMode => pipe
+      case _ => new RichPipe(pipe).mapTo(fields -> fields) { v: (Long, V) =>
+        val key = new LongWritable(v._1)
+        val value = new ThriftWritable(v._2, typeRef)
+        (key, value)
+      }
     }
   }
   lazy val typeRef = ThriftUtils.getTypeRef(mt.erasure).asInstanceOf[TypeRef[TBase[_, _]]]

@@ -42,6 +42,8 @@ trait CheckedInversion[T,U] extends java.io.Serializable {
 trait LzoCodec[T] extends FileSource with Mappable[T] {
   def injection: Injection[T,Array[Byte]]
   override def localPath = sys.error("Local mode not yet supported.")
+  // This jank is needed for making these work with JobTest
+  override def localScheme = { println("This does not work yet"); new CLTextDelimited(sourceFields) }
   override def hdfsScheme = HadoopSchemeInstance(new LzoByteArrayScheme)
   override val converter = Dsl.singleConverter[T]
   override def transformForRead(pipe: Pipe) =
